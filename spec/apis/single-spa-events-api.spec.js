@@ -526,4 +526,86 @@ describe(`events api :`, () => {
         .catch(fail);
     });
   });
+
+  describe(`cancelNavigation`, () => {
+    it(`allows you to cancel a hash navigation event in the before-routing-event handler`, (done) => {
+      const beforeRoutingEvent = (evt) => {
+        expect(evt.detail.oldUrl).toMatch(/http:\/\/localhost\/(#\/)?/);
+        expect(evt.detail.newUrl).toBe("http://localhost/#/russell");
+
+        if (new URL(evt.detail.newUrl).hash === "#/russell") {
+          evt.detail.cancelNavigation();
+        }
+      };
+
+      window.addEventListener(
+        "single-spa:before-routing-event",
+        beforeRoutingEvent
+      );
+
+      const originalStatus = singleSpa.getAppStatus("russell");
+      const originalUrl = window.location.href;
+
+      expect(originalStatus).toMatch(/NOT_MOUNTED|NOT_LOADED/);
+
+      window.location.hash = `#/russell`;
+
+      singleSpa
+        .triggerAppChange()
+        .then(() => {
+          expect(singleSpa.getAppStatus("russell")).toBe(originalStatus);
+          expect(window.location.href).toBe(originalUrl);
+        })
+        .catch(fail)
+        .finally(() => {
+          window.removeEventListener(
+            "single-spa:before-routing-event",
+            beforeRoutingEvent
+          );
+          done();
+        });
+    });
+
+    it(`allows you to cancel a pushState navigation event in the before-routing-event handler`, async () => {
+      await singleSpa.triggerAppChange("/");
+
+      const app = { async mount() {}, async unmount() {} };
+      singleSpa.registerApplication({
+        name: "cancel-pushstate",
+        app,
+        activeWhen: "/cancel-pushstate",
+      });
+
+      const beforeRoutingEvent = (evt) => {
+        window.removeEventListener(
+          "single-spa:before-routing-event",
+          beforeRoutingEvent
+        );
+        expect(evt.detail.oldUrl).toMatch(/http:\/\/localhost\/(#\/)?/);
+        expect(evt.detail.newUrl).toBe("http://localhost/cancel-pushstate");
+
+        if (new URL(evt.detail.newUrl).pathname === "/cancel-pushstate") {
+          evt.detail.cancelNavigation();
+        }
+      };
+
+      await singleSpa.triggerAppChange();
+
+      window.addEventListener(
+        "single-spa:before-routing-event",
+        beforeRoutingEvent
+      );
+
+      const originalStatus = singleSpa.getAppStatus("russell");
+      const originalUrl = window.location.href;
+
+      expect(originalStatus).toMatch(/NOT_MOUNTED|NOT_LOADED/);
+
+      singleSpa.navigateToUrl("/cancel-pushstate");
+
+      await singleSpa.triggerAppChange();
+      expect(singleSpa.getAppStatus("russell")).toBe(originalStatus);
+      expect(window.location.href).toBe(originalUrl);
+    });
+  });
 });

@@ -90,19 +90,21 @@ export function mountParcel(config, customProps) {
     customProps,
     parentName: toName(owningAppOrParcel),
     unmountThisParcel() {
-      if (parcel.status !== MOUNTED) {
-        throw Error(
-          formatErrorMessage(
-            6,
-            __DEV__ &&
-              `Cannot unmount parcel '${name}' -- it is in a ${parcel.status} status`,
-            name,
-            parcel.status
-          )
-        );
-      }
-
-      return toUnmountPromise(parcel, true)
+      return mountPromise
+        .then(() => {
+          if (parcel.status !== MOUNTED) {
+            throw Error(
+              formatErrorMessage(
+                6,
+                __DEV__ &&
+                  `Cannot unmount parcel '${name}' -- it is in a ${parcel.status} status`,
+                name,
+                parcel.status
+              )
+            );
+          }
+          return toUnmountPromise(parcel, true);
+        })
         .then((value) => {
           if (parcel.parentName) {
             delete owningAppOrParcel.parcels[parcel.id];
@@ -153,11 +155,15 @@ export function mountParcel(config, customProps) {
 
     const name = config.name || `parcel-${id}`;
 
-    if (!validLifecycleFn(config.bootstrap)) {
+    if (
+      // ES Module objects don't have the object prototype
+      Object.prototype.hasOwnProperty.call(config, "bootstrap") &&
+      !validLifecycleFn(config.bootstrap)
+    ) {
       throw Error(
         formatErrorMessage(
           9,
-          __DEV__ && `Parcel ${name} must have a valid bootstrap function`,
+          __DEV__ && `Parcel ${name} provided an invalid bootstrap function`,
           name
         )
       );
